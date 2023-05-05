@@ -8,11 +8,13 @@ a prediction of object
 locations in the scene using
 Mask2Former + Cross Frame Matching
 """
-import skvideo.io
+import imageio.v3 as iio
 from PIL import Image
 import os
 
-def videoFileToImages(videoFileName, frameSkip=30):
+COLMAP_INPUT_DIR = "colmapIn"
+
+def videoFileToImages(videoFileName, frameSkip) -> None:
     """
     Takes a video file, and
     converts it to a list of
@@ -28,16 +30,18 @@ def videoFileToImages(videoFileName, frameSkip=30):
        too small and you might get ambiguities due
        to low parralax between frames.
     """
-    video = skvideo.io.vreader(videoFileName)
+
+    # Make the directory if it doesn't exist
+    if not os.path.exists(COLMAP_INPUT_DIR):
+        os.makedirs(COLMAP_INPUT_DIR)
+
     frameCount = 0
-    images = []
-    for frame in video:
+    for frame in iio.imiter(f"{videoFileName}", plugin="pyav"):
         frameCount += 1
         if frameCount % frameSkip == 0:
             # Convert to image
             pilImage = Image.fromarray(frame)
-            images.append(pilImage)
-    return images
+            pilImage.save(f"{COLMAP_INPUT_DIR}/{frameCount}.jpg")
 
 def runOnVideoFile(videoFileName, frameSkip=30):
     """
@@ -57,4 +61,4 @@ def runOnVideoFile(videoFileName, frameSkip=30):
     videoFileToImages(videoFileName, frameSkip)
 
 
-runOnVideoFile("IMG_3594.MOV")
+runOnVideoFile("inputvid.mp4")
