@@ -6,10 +6,13 @@ authors = ["Adithya Yerramsetty <adithya.yerramsetty@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.8,<3.12"
 pillow = "^9.5.0"
 imageio = "^2.28.1"
 av = "^10.0.0"
+transformers = "^4.28.1"
+torch = "^2.0.0"
+scipy = "^1.10.1"
 
 
 [build-system]
