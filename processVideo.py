@@ -19,7 +19,7 @@ from PIL import Image
 panopticProcessor = AutoImageProcessor.from_pretrained("facebook/mask2former-swin-base-coco-panoptic")
 panopticModel = Mask2FormerForUniversalSegmentation.from_pretrained("facebook/mask2former-swin-base-coco-panoptic")
 
-COLMAP_INPUT_DIR = "colmapIn"
+COLMAP_INPUT_DIR = "images"
 SEMANTIC_RESULT_DIR = "semanticOut"
 
 def videoFileToImages(videoFileName, frameSkip) -> None:
@@ -93,17 +93,38 @@ def runColmap() -> None:
     """
     Runs CLI calls to run colmap on the input images.
     """
-    currentDir = os.getcwd()
+    DATASET_PATH = os.getcwd()
+
+    # This runs all the components of the automatic reconstruction
+    # that runs on sparse, and adds the constraint
+    # that all images are from the same camera, implying
+    # shared intrinsics
+    os.system(f"colmap feature_extractor \
+        --database_path {DATASET_PATH}/database.db \
+        --image_path {DATASET_PATH}/images \
+        --ImageReader.single_camera 1")
     
-    # Run the colmap commands for
-    # automatic reconstruction
-    # os.system(f"colmap automatic_reconstructor --workspace_path={currentDir} --image_path {currentDir}/{COLMAP_INPUT_DIR}")
+    os.system(f"colmap exhaustive_matcher \
+        --database_path {DATASET_PATH}/database.db""")
+    
+    os.system(f"mkdir {DATASET_PATH}/sparse")
 
-    # Converts bin files to text files
-    os.system(f"python3 colMapBinToText.py --input_model {currentDir}/sparse/0 --input_format .bin --output_model {currentDir}/sparse/0 --output_format .txt")
+    os.system(f"colmap mapper \
+        --database_path {DATASET_PATH}/database.db \
+        --image_path {DATASET_PATH}/images \
+        --output_path {DATASET_PATH}/sparse")
 
+    # Converts bin files to text files for easier reading
+    os.system(f"python3 colMapBinToText.py --input_model {DATASET_PATH}/sparse/0 --input_format .bin --output_model {DATASET_PATH}/sparse/0 --output_format .txt")
 
-def runOnVideoFile(videoFileName, frameSkip=30):
+def convertVideoFileToMP4(videoFileName) -> str:
+    fileName = videoFileName.split(".")[0]
+    newFileName = f"{fileName}-asmp4.mp4"
+    os.system(f"ffmpeg -i {videoFileName} -vcodec h264 -acodec mp2 {newFileName}")
+    
+    return newFileName
+
+def runOnVideoFile(videoFileName, frameSkip=30) -> None:
     """
     Takes a video file, and
     runs the entire pipeline
@@ -118,9 +139,12 @@ def runOnVideoFile(videoFileName, frameSkip=30):
        too small and you might get ambiguities due
        to low parralax between frames.
     """
+    # Convert to mp4
+    # videoFileName = convertVideoFileToMP4(videoFileName)
     # videoFileToImages(videoFileName, frameSkip)
+    # runColmap()
     # runPanopticSegmentation()
-    runColmap()
+    
 
 
-runOnVideoFile("inputvid.mp4")
+runOnVideoFile("kunjOriginal.mov")

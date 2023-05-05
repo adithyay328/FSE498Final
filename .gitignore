@@ -1,5 +1,5 @@
 # Ignore colmap image files
-colmapIn/**
+images/**
 
 # Ignore colmap output files
 **/sparse/**
