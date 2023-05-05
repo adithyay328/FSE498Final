@@ -1,0 +1,9 @@
+# Ignore colmap image files
+colmapIn/**
+
+# Ignore colmap output files
+**/sparse/**
+**/dense/**
+
+# Ignore sqlite database files
+**.db
