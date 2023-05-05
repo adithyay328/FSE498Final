@@ -7,3 +7,6 @@ colmapIn/**
 
 # Ignore sqlite database files
 **.db
+
+# Ignore segmentation files
+semanticOut/**
