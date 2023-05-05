@@ -9,7 +9,6 @@ locations in the scene using
 Mask2Former + Cross Frame Matching
 """
 import os
-from datetime import datetime, timedelta
 import json
 
 from transformers import AutoImageProcessor, Mask2FormerForUniversalSegmentation
@@ -90,6 +89,19 @@ def runPanopticSegmentation():
         with open(f"{SEMANTIC_RESULT_DIR}/{fileName}.json", "w") as f:
             json.dump(panopticResultDict, f)
 
+def runColmap() -> None:
+    """
+    Runs CLI calls to run colmap on the input images.
+    """
+    currentDir = os.getcwd()
+    
+    # Run the colmap commands for
+    # automatic reconstruction
+    # os.system(f"colmap automatic_reconstructor --workspace_path={currentDir} --image_path {currentDir}/{COLMAP_INPUT_DIR}")
+
+    # Converts bin files to text files
+    os.system(f"python3 colMapBinToText.py --input_model {currentDir}/sparse/0 --input_format .bin --output_model {currentDir}/sparse/0 --output_format .txt")
+
 
 def runOnVideoFile(videoFileName, frameSkip=30):
     """
@@ -107,7 +119,8 @@ def runOnVideoFile(videoFileName, frameSkip=30):
        to low parralax between frames.
     """
     # videoFileToImages(videoFileName, frameSkip)
-    runPanopticSegmentation()
+    # runPanopticSegmentation()
+    runColmap()
 
 
 runOnVideoFile("inputvid.mp4")
