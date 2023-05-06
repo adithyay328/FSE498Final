@@ -42,10 +42,15 @@ class Camera:
         translation: np.ndarray = np.zeros(3),
         rotation: np.ndarray = np.eye(3),
     ):
+        # These are all in the convention of the camera matrix,
+        # not in world coordinates
         self.rotation = rotation
         self.translation = translation
         self.extrinsics: np.ndarray = np.hstack((rotation, translation.reshape(3, 1)))
         self.intrinsics: np.ndarray = intrinsics
+
+        self.worldRotation = rotation.T
+        self.worldTranslation = -self.worldRotation @ translation
 
         # A camera matrix, which is really the product of extrinsics and intrinsics
         self.cameraMat: np.ndarray = self.intrinsics @ self.extrinsics
@@ -82,8 +87,31 @@ class Camera:
         translation = np.array([tx, ty, tz])
 
         # Need to convert to convention this matrix uses
-        conventionRotation = rotation.T
-        conventionTranslation = -conventionRotation @ translation
+        conventionRotation = rotation
+        conventionTranslation = translation
 
         return Camera(intrinsics, conventionTranslation, conventionRotation)
         
+    def project(self, point3D : np.ndarray) -> np.ndarray:
+        """
+        Given a 3D world point,
+        return the 2D projection
+        of that point onto this camera.
+
+        :param point3D: A 3D point in the world,
+            in heterogenous coordinates. We will
+            do all conversions for you.
+        
+        :returns: The 2D point in the camera
+            image plane, in heterogenous coordinates.
+        """
+        assert point3D.shape == (3,), "Point must be 3D"
+        point3DHomo = np.append(point3D, 1)
+
+        # Project the point
+        point2DHomo = self.cameraMat @ point3DHomo
+
+        # Convert to inhomogenous coordinates
+        point2D = point2DHomo[:2] / point2DHomo[2]
+
+        return point2D
