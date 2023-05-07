@@ -11,6 +11,10 @@ import random
 
 import numpy as np
 from annoy import AnnoyIndex
+import matplotlib
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import get_cmap
+import open3d as o3d
 
 from colmapUtils import COLMAPImage, COLMAPCamera, COLMAPPoint3D, COLMAPPoint2D, COLMAPCamera, COLMAPDirectoryReader
 from panopticUtils import getPanopticLabelIDAndSegmentID, PanopticResultsReader, labelIDToString
@@ -422,6 +426,38 @@ class DisjointSetManager:
 
         # Delete the second set
         del self.disjointSets[ disjointSetTwo ]
+    
+    def visualizePoints(self):
+        """
+        Visualizes the current point cloud,
+        with one color per object.
+        """
+        # First, get a color map for each disjoint
+        # set
+        cmap = get_cmap('tab20', len( self.disjointSets ) )
+
+        # Now, iterate through all disjoint sets,
+        # and add all 3D points and their
+        # colors to a list
+        points3D : List[ np.ndarray ] = []
+        colors : List[ np.ndarray ] = []
+        
+        for i, (disjointSetUID, disjointSet) in enumerate(self.disjointSets.items()):
+            for point3D in disjointSet.points3DAsNumpy:
+                points3D.append( point3D )
+                colors.append( np.array( cmap( i ) , dtype=float)[:3] )
+        
+        print(colors)
+        
+        # Create open3d point cloud
+        pointCloud = o3d.geometry.PointCloud()
+
+        # Add points and colors
+        pointCloud.points = o3d.utility.Vector3dVector( points3D )
+        pointCloud.colors = o3d.utility.Vector3dVector( colors )
+
+        # Visualize
+        o3d.visualization.draw_geometries([pointCloud])
 
 # Test code
 if __name__ == "__main__":

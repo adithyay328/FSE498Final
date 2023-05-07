@@ -137,7 +137,8 @@ def runOnVideoFile(videoFileName, cleanDir, frameSkip=30) -> None:
     disjointSetManager.initialize()
     # disjointSetManager.fuse_naive()
     disjointSetManager.fuse_kd()
-    disjointSetManager.visualize()
+    # disjointSetManager.visualize()
+    disjointSetManager.visualizePoints()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process a video file")
