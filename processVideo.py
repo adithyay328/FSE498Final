@@ -135,7 +135,7 @@ def runOnVideoFile(videoFileName, cleanDir, frameSkip=30) -> None:
     # Pass into disjoint sets to do fusing
     disjointSetManager = DisjointSetManager(colmapReader)
     disjointSetManager.initialize()
-    disjointSetManager.fuse()
+    disjointSetManager.fuse_naive()
     disjointSetManager.visualize()
 
 if __name__ == "__main__":

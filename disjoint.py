@@ -170,10 +170,19 @@ class DisjointSetManager:
             for point3D in newDisjointSet.points3D:
                 self.pointToDisjointSet[ point3D.uid ] = newDisjointSet.uid
     
-    def fuse(self):
+    def fuse_naive(self):
         """
         Iterates over all disjoints, and tries
-        to fuse into coherent objects
+        to fuse into coherent objects, with
+        a rather naive approach: assume that all
+        point correspondences are correct, and
+        that all points in a disjoint set belong
+        to the same object. At each iteration,
+        union ALL disjoints that have a 2D panoptic
+        instance in common, without doing any
+        cross frame matching. This is a very
+        agressive assumption, but it's a good
+        starting point and gets decent results.
         """
         # We're going to iterate through all the disjoint
         # sets, and union all disjoints sets that have
