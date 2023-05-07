@@ -119,7 +119,7 @@ class PanopticResultsReader:
             with open( f"{SEMANTIC_RESULT_DIR}/{fName}", "r" ) as f:
                 self.fNameLookup[ fNameNoJSON ] = json.load( f )
     
-    def getPanopticLabelIDAndSegmentID( self, imgName : str, pixelCoord2D : np.ndarray ):
+    def getPanopticLabelIDAndSegmentID( self, imgName : str, pixelCoord2D : np.ndarray ) -> ( int, int ):
         """
         Given an image name and a 2D pixel coordinate,
         returns a tuple of ( lablID, segmentID ), where
@@ -127,19 +127,32 @@ class PanopticResultsReader:
         that was assigned to the pixel, and segmentID is the ID of the instance
         that was assigned to the pixel in this specific image(not valid
         accross images)
+
+        :param imgName: The name of the image to query
+        :param pixelCoord2D: The 2D pixel coordinate to query
+
+        :return: A tuple of ( labelID, segmentID ), or (-1, -1) if
+            the pixel coordinate is out of bounds
         """
         panopticResultDict = self.fNameLookup[ imgName ]
+
+        # Check if the pixel coordinate is out of bounds
+        # after truncation
+        if int(pixelCoord2D[ 0 ]) >= len( panopticResultDict[ "segmentationList" ] ) or \
+            int(pixelCoord2D[ 1 ]) >= len( panopticResultDict[ "segmentationList" ][ 0 ] ) \
+            or int(pixelCoord2D[ 0 ]) < 0 or int(pixelCoord2D[ 1 ]) < 0:
+            return ( -1, -1 )
         
         # The segment id is accesed by just indexing the segmentation list
         # with the pixel coordinate
-        segmentID = panopticResultDict[ "segmentationList" ][ int(pixelCoord2D[ 0 ]) ][ int(pixelCoord2D[ 1 ]) ]
+        segmentID = int(panopticResultDict[ "segmentationList" ][ int(pixelCoord2D[ 0 ]) ][ int(pixelCoord2D[ 1 ]) ])
 
         # The label id is accessed by looking up the segment id in the assignments
         # dict
         labelID = 0
         for assignment in panopticResultDict[ "assignments" ]:
             if assignment[ "id" ] == segmentID:
-                labelID = assignment[ "label_id" ]
+                labelID = int(assignment[ "label_id" ])
                 break
         
         return ( labelID, segmentID )

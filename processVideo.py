@@ -120,22 +120,23 @@ def runOnVideoFile(videoFileName, cleanDir, frameSkip=30) -> None:
        too small and you might get ambiguities due
        to low parralax between frames.
     """
-    clearDirectories()
+    # clearDirectories()
 
-    videoFileName = convertVideoFileToMP4(videoFileName)
-    videoFileToImages(videoFileName, frameSkip)
-    runColmap()
-    runPanopticSegmentation()
+    # videoFileName = convertVideoFileToMP4(videoFileName)
+    # videoFileToImages(videoFileName, frameSkip)
+    # runColmap()
+    # runPanopticSegmentation()
 
     # Get COLMAP data
     colmapReader = COLMAPDirectoryReader("sparse/0")
-    colmapReader.displayWorldPointErrorHistogram()
+    # colmapReader.displayWorldPointErrorHistogram()
     
 
     # Pass into disjoint sets to do fusing
     disjointSetManager = DisjointSetManager(colmapReader)
     disjointSetManager.initialize()
-    disjointSetManager.fuse_naive()
+    # disjointSetManager.fuse_naive()
+    disjointSetManager.fuse_kd()
     disjointSetManager.visualize()
 
 if __name__ == "__main__":

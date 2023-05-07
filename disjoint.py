@@ -7,8 +7,10 @@ across frames.
 from typing import Dict, List, Set, Tuple
 from uid import UID
 import bisect
+import random
 
 import numpy as np
+from annoy import AnnoyIndex
 
 from colmapUtils import COLMAPImage, COLMAPCamera, COLMAPPoint3D, COLMAPPoint2D, COLMAPCamera, COLMAPDirectoryReader
 from panopticUtils import getPanopticLabelIDAndSegmentID, PanopticResultsReader, labelIDToString
@@ -24,7 +26,7 @@ class DisjointSet:
         # Create a UID
         self.uid = UID()
 
-        # Initialze all storage fields
+        # Initialize all storage fields
         self.points2D : List[ COLMAPPoint2D ] = []
         self.points3D : List[ COLMAPPoint3D ] = []
         # A helper list that stores all 3D points
@@ -40,9 +42,9 @@ class DisjointSet:
         self.classVotes : Dict[ int, int ] = {}
 
         # This dict stores a set, with entries
-        # of format concatenate(image file name, segment ID[integer])
+        # of format concatenate(image file name, "_" segment ID[integer])
         # For example, if we have an image named "0001.jpg" and a segment
-        # ID of 5, then the key would be "0001.jpg5"
+        # ID of 5, then the key would be "0001.jpg_5"
         self.imageSegmentation : Set[str] = set()
     
     @staticmethod
@@ -80,7 +82,7 @@ class DisjointSet:
                 newSet.classVotes[ panopticLabelID ] = 0
             newSet.classVotes[ panopticLabelID ] += 1
 
-            segmentationDictKey = imgName + str( panopticSegmentID )
+            segmentationDictKey = imgName + "_" +  str( panopticSegmentID )
 
             # Add class segment to dict
             if segmentationDictKey not in newSet.imageSegmentation:
@@ -169,6 +171,145 @@ class DisjointSetManager:
                 self.pointToDisjointSet[ point2D.uid ] = newDisjointSet.uid
             for point3D in newDisjointSet.points3D:
                 self.pointToDisjointSet[ point3D.uid ] = newDisjointSet.uid
+            
+    def fuse_kd(self, imagesToProject : int = 20, projectionAgreementRate = 0.7, annoyTreeK = 10, annoyNNs = 20):
+        """
+        A (hopefully) more accurate version of
+        fuse_naive. This version uses a KD tree
+        for nearest neighbor search, and generally
+        works like this:
+
+        Do while last iteration fused atleast 2 sets together(stopping condition):
+            1. Train an annoy tree on centroids of all remaining disjoint sets
+            2. Starting with the disjoint set with the most 2D points(this has the
+            most tracks, and likely the most discrminatory power + semantic information),
+            find the k nearest disjoint sets to it.
+            3. For each of the k nearest sets, project a subset
+            of their 3D points into some subset of the main
+            sets 2D images. If it falls in the same panoptic instance at a high enough
+            rate( > 70% of the time), these sets are pointing to the same object,
+            in which case we should fuse.
+            4. Repeat for all 10 nearest neighbours, and repeat from step 2 until you've
+            iterated through all disjoint sets once. Then, restart the entire loop,
+            stopping when the stopping condition is met
+        
+        :param imagesToProject: The number of images to project into when
+            doing cross frame matching. Higher numbers = more accurate,
+            but slower. Lower numbers = faster, but less accurate.
+        :param projectionAgreementRate: The rate at which the projected
+            points must agree in order to fuse. Higher numbers = more
+            accurate, but slower. Lower numbers = faster, but less
+            accurate.
+        """
+        # The number of unions we ran last loop
+        lastLoopUnions = 1
+        while lastLoopUnions > 0:
+            lastLoopUnions = 0
+
+            # First, get a sorted list of all disjoint set UIDs, since
+            # annoy needs an integer key. Sort by decreasing number of
+            # 2D points
+            sortedDisjointSetUIDs = list( self.disjointSets.keys() )
+            sortedDisjointSetUIDs.sort(key=lambda x: len( self.disjointSets[x].points2D ), reverse=True)
+
+            # Now, create a list of numpy arrays, where each numpy array
+            # is the centroid of the ith disjoint set in the sorted list
+            # of disjoint set UIDs
+            centroidList : List[ np.ndarray ] = []
+            for disjointSetUID in sortedDisjointSetUIDs:
+                centroidList.append( np.mean( self.disjointSets[ disjointSetUID ].points3DAsNumpy, axis=0 ) )
+            
+            # Now, create an annoy tree
+            annoyTree = AnnoyIndex(3, 'euclidean')
+            for i, centroid in enumerate( centroidList ):
+                annoyTree.add_item( i, centroid.tolist() )
+            annoyTree.build( annoyTreeK )
+
+            # Now, as with the naive approach, we're going to make
+            # a mapping from disjoint set UID to disjoint set UID,
+            # with the latter being updated as we perform unions.
+            # This is used to keep track of which disjoint sets
+            # have been unioned
+            disjointSetToDisjointSet : Dict[ UID, UID ] = {}
+            for disjointSetUID in self.disjointSets:
+                disjointSetToDisjointSet[ disjointSetUID ] = disjointSetUID
+
+            # Now, iterate through all disjoint sets, and find the k nearest
+            # neighbours to each disjoint set
+            for i, disjointSetUID in enumerate( sortedDisjointSetUIDs ):
+                # If disjointSetUID has been unioned, update
+                # disjointSetUID to the new UID
+                while disjointSetToDisjointSet[ disjointSetUID ] != disjointSetUID:
+                    disjointSetUID = disjointSetToDisjointSet[ disjointSetUID ]
+
+                # Get the k nearest neighbours; note that the
+                # first nearest neighbour will be the disjoint
+                # set itself, so we need to get the k + 1 nearest
+                # neighbours, and then remove the first one
+                nearestNeighbours = annoyTree.get_nns_by_item( i, annoyNNs + 1 )[1:]
+
+                # Now, iterate through all nearest neighbours, and project
+                # them into the main set, counting how many
+                # show up in the same image instances
+                for nearestNeighbour in nearestNeighbours:
+                    # First, extract the nearest neighbour
+                    nearestNeighbourUID = sortedDisjointSetUIDs[ nearestNeighbour ]
+
+                    # As with main UID, if nearest neighbour has been unioned,
+                    # update nearest neighbour UID to the new UID repeatedly,
+                    # until we get to the correct ones
+                    while disjointSetToDisjointSet[ nearestNeighbourUID ] != nearestNeighbourUID:
+                        nearestNeighbourUID = disjointSetToDisjointSet[ nearestNeighbourUID ]
+                    
+                    # Ignore if nearest neighbour is the same as the current
+                    # disjoint set; this can happen if we already unioned
+                    # this set
+                    if nearestNeighbourUID == disjointSetUID:
+                        continue
+
+                    nearestNeighbourSet = self.disjointSets[ nearestNeighbourUID ]
+
+                    # Now, extract n world points from the other set,
+                    # and n 2D points from the main set. Project
+                    # the n world points into the corresponding
+                    # images in the main set, and count how many
+                    # of them land in the same panoptic instance
+                    # as the 2D point. If high agreement, we union
+                    # the sets
+                    randomWorldPoints = random.choices(nearestNeighbourSet.points3D, k=imagesToProject)
+                    random2DPoints = random.choices(self.disjointSets[ disjointSetUID ].points2D, k=imagesToProject)
+
+                    # Now, iterate over each pair of world point / 2D point, project,
+                    # and see if there is agreement
+                    agreementCount = 0
+                    for worldPoint, point2D in zip( randomWorldPoints, random2DPoints ):
+                        # First, get the corresponding image for the 2d point
+                        imageIdx : int = bisect.bisect_left( self.colmapData.images, point2D.imageIdx, key=lambda x: x.imageID )
+                        image : COLMAPImage = self.colmapData.images[ imageIdx ]
+
+                        # Now, project the world point into the camera
+                        # corresponding to the image
+                        worldPointHomogenous = np.array( [ worldPoint.x, worldPoint.y, worldPoint.z, 1 ] )
+                        projectionHomogenous = image.cameraMatrix.cameraMat @ worldPointHomogenous
+                        projectionHeterogenous = projectionHomogenous[:2] / projectionHomogenous[2]
+
+                        # Now, get the panoptic label ID and segment ID for the projection
+                        panopticLabelID, panopticSegmentID = self.panopticReader.getPanopticLabelIDAndSegmentID( image.name, projectionHeterogenous )
+
+                        # If out of bounds, ignore
+                        if (panopticLabelID, panopticSegmentID) == (-1, -1):
+                            continue
+                        
+                        # Now, check if the 2 agree
+                        if panopticSegmentID == self.panopticReader.getPanopticLabelIDAndSegmentID( image.name, np.array( [ point2D.x, point2D.y ] ) )[1]:
+                            agreementCount += 1
+                    
+                    # If the agreement rate is high enough, union the sets
+                    if agreementCount / imagesToProject >= projectionAgreementRate:
+                        lastLoopUnions += 1
+                        print(f"Taking union of {disjointSetUID.toString()} and {nearestNeighbourUID.toString()}""")
+                        self.union( disjointSetUID, nearestNeighbourUID )
+                        disjointSetToDisjointSet[ nearestNeighbourUID ] = disjointSetToDisjointSet[ disjointSetUID ]
     
     def fuse_naive(self):
         """
