@@ -10,3 +10,6 @@ images/**
 
 # Ignore segmentation files
 semanticOut/**
+
+# Ignore input video files
+vids/**

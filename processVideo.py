@@ -9,15 +9,14 @@ locations in the scene using
 Mask2Former + Cross Frame Matching
 """
 import os
-import json
+import argparse
 
-from transformers import AutoImageProcessor, Mask2FormerForUniversalSegmentation
-import torch
 import imageio.v3 as iio
 from PIL import Image
 
 from colmapUtils import COLMAPDirectoryReader
-from panopticUtils import runPanopticSegmentation
+from panopticUtils import runPanopticSegmentation, SEMANTIC_RESULT_DIR
+from disjoint import DisjointSetManager
 
 COLMAP_INPUT_DIR = "images"
 
@@ -96,8 +95,17 @@ def convertVideoFileToMP4(videoFileName) -> str:
 
     return newFileName
 
+def clearDirectories() -> None:
+    """
+    Clears the directory of all files
+    generated during the run.
+    """
+    os.system("rm -rf sparse")
+    os.system("rm -rf images")
+    os.system("rm -rf database.db")
+    os.system(f"rm -rf {SEMANTIC_RESULT_DIR}")
 
-def runOnVideoFile(videoFileName, frameSkip=30) -> None:
+def runOnVideoFile(videoFileName, cleanDir, frameSkip=30) -> None:
     """
     Takes a video file, and
     runs the entire pipeline
@@ -112,7 +120,8 @@ def runOnVideoFile(videoFileName, frameSkip=30) -> None:
        too small and you might get ambiguities due
        to low parralax between frames.
     """
-    # Convert to mp4
+    clearDirectories()
+
     videoFileName = convertVideoFileToMP4(videoFileName)
     videoFileToImages(videoFileName, frameSkip)
     runColmap()
@@ -120,6 +129,30 @@ def runOnVideoFile(videoFileName, frameSkip=30) -> None:
 
     # Get COLMAP data
     colmapReader = COLMAPDirectoryReader("sparse/0")
+    colmapReader.displayWorldPointErrorHistogram()
+    
 
+    # Pass into disjoint sets to do fusing
+    disjointSetManager = DisjointSetManager(colmapReader)
+    disjointSetManager.initialize()
+    disjointSetManager.fuse()
+    disjointSetManager.visualize()
 
-runOnVideoFile("kunjOriginal.mov")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Process a video file")
+    parser.add_argument(
+        "video_file",
+        type=str,
+        help="The name of the video file to process",
+    )
+    parser.add_argument(
+        "--clean_dir",
+        type=bool,
+        help="Whether to clean the directory of all files before starting the run",
+        default=False
+    )
+    args = parser.parse_args()
+    fileName = args.video_file
+    cleanDir = args.clean_dir
+
+    runOnVideoFile(fileName, cleanDir)

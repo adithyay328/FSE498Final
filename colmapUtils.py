@@ -5,7 +5,11 @@ Implements utils to parse colmap text files
 from typing import List
 import os
 
+import matplotlib.pyplot as plt
+import numpy as np
+
 from cameraMatrix import Camera
+from uid import UID
 
 class COLMAPCamera:
     """
@@ -83,6 +87,7 @@ class COLMAPImage:
         camera: COLMAPCamera,
         points2D: list = [],
     ):
+        self.uid = UID(f"image_{imageID}_{name}")
         self.imageID = imageID
         self.qw = qw
         self.qx = qx
@@ -111,16 +116,35 @@ class COLMAPImage:
             self.camera.camCenterY,
         )
 
+class COLMAPPoint2D:
+    """
+    A helper class that represents a
+    2D point tracked by COLMAP. Contains
+    XY coordinates, the index of the image
+    it was found in, and the index of the
+    3D point it corresponds to.
+    """
+    def __init__(self, x : float, y : float, imageIdx : int, point3DIdx : int):
+        self.uid = UID(f"point2_{x}_{y}_{imageIdx}_{point3DIdx}")
+
+        self.x = x
+        self.y = y
+        self.imageIdx = imageIdx
+        self.point3DIdx = point3DIdx
+
 
 class COLMAPPoint3D:
     """
     A class representing a single 3D point
     in COLMAP. Contains the 3D point's position,
     and the list of 2D points that correspond
-    to it(SFM tracks).
+    to it(SFM tracks). Tracks have the
+    format (imageIdx, point2DIdx)
     """
-    def __init__(self, point3ID : int, x : float, y : float, z : float, r : int, g : int, b : int, error : float, track : list):
-        self.point3ID = point3ID
+    def __init__(self, point3Idx : int, x : float, y : float, z : float, r : int, g : int, b : int, error : float, track : list):
+        self.uid = UID(f"point3_{point3Idx}_{x}_{y}_{z}")
+
+        self.point3Idx = point3Idx
         self.x = x
         self.y = y
         self.z = z
@@ -159,6 +183,35 @@ class COLMAPDirectoryReader:
         self._parsePoints()
         self._parseCameras()
         self._parseImages()
+    
+    def displayWorldPointErrorHistogram(self):
+        """
+        Prints a histogram of the world point
+        error. Useful to exclude points with
+        high errors.
+        """
+        # Get all errors
+        errors = [point.error for point in self.points]
+        
+        # Compute mean and median error
+        errorNumpy = np.array(errors)
+        meanError = np.mean(errorNumpy)
+        medianError = np.median(errorNumpy)
+
+        # Show histogram, plotting median and mean on it
+        plt.hist(errors, bins=20)
+        plt.title("World Point Error Histogram")
+        plt.xlabel("Error")
+        plt.ylabel("Count")
+        plt.axvline(float(meanError), color='g', linestyle='dashed', linewidth=1)
+        plt.axvline(float(medianError), color='r', linestyle='dashed', linewidth=1)
+
+        min_ylim, max_ylim = plt.ylim()
+
+        plt.text(float(meanError) * 1.1, max_ylim * 0.9, f"Mean Error: {meanError:.2f}")
+        plt.text(float(medianError) * 1.4, max_ylim * 0.6, f"Median Error: {medianError:.2f}")
+
+        plt.show()
     
     def _parsePoints(self):
         """
@@ -209,6 +262,9 @@ class COLMAPDirectoryReader:
 
             # Add to list
             self.points.append(newPoint)
+        
+        # Sort points by ID
+        self.points.sort(key=lambda x: x.point3Idx)
         
     def _parseCameras(self):
         """
@@ -303,14 +359,18 @@ class COLMAPDirectoryReader:
             ty = float(coreVals[6])
             tz = float(coreVals[7])
             cameraID = int(coreVals[8])
+            imageName = coreVals[9]
 
             # Parse points2D
             parsedPoints2D = []
             for i in range(0, len(pointsLineSplit), 3):
-                parsedPoints2D.append((float(pointsLineSplit[i]), float(pointsLineSplit[i + 1]), int(pointsLineSplit[i + 2])))
+                parsedPoints2D.append(COLMAPPoint2D(float(pointsLineSplit[i]), float(pointsLineSplit[i + 1]), imageID, int(pointsLineSplit[i + 2])))
             
             # Construct COLMAPImage
-            newImage = COLMAPImage(imageID, qw, qx, qy, qz, tx, ty, tz, cameraID, "", self.cameras[cameraID - 1], parsedPoints2D)
+            newImage = COLMAPImage(imageID, qw, qx, qy, qz, tx, ty, tz, cameraID, imageName, self.cameras[cameraID - 1], parsedPoints2D)
 
             # Add to list
             self.images.append(newImage)
+        
+        # Sort images by ID
+        self.images.sort(key=lambda x: x.imageID)
