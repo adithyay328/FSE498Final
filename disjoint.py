@@ -161,8 +161,8 @@ class DisjointSetManager:
             # If the disjoint set has more than one class association,
             # ignore it. It's an agressive policy, but should lead
             # to better results
-            if len( newDisjointSet.classVotes ) > 1:
-                continue
+            # if len( newDisjointSet.classVotes ) > 1:
+            #     continue
 
             self.disjointSets[ newDisjointSet.uid ] = newDisjointSet
 
@@ -172,7 +172,7 @@ class DisjointSetManager:
             for point3D in newDisjointSet.points3D:
                 self.pointToDisjointSet[ point3D.uid ] = newDisjointSet.uid
             
-    def fuse_kd(self, imagesToProject : int = 15, projectionAgreementRate = 0.65, annoyTreeK = 10, annoyNNs = 30):
+    def fuse_kd(self, imagesToProject : int = 10, projectionAgreementRate = 0.65, annoyTreeK = 5, annoyNNs = 40):
         """
         A (hopefully) more accurate version of
         fuse_naive. This version uses a KD tree
