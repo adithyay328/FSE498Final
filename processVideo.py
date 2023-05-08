@@ -120,12 +120,12 @@ def runOnVideoFile(videoFileName, cleanDir, frameSkip=10) -> None:
        too small and you might get ambiguities due
        to low parralax between frames.
     """
-    # clearDirectories()
+    clearDirectories()
 
-    # videoFileName = convertVideoFileToMP4(videoFileName)
-    # videoFileToImages(videoFileName, frameSkip)
-    # runColmap()
-    # runPanopticSegmentation()
+    videoFileName = convertVideoFileToMP4(videoFileName)
+    videoFileToImages(videoFileName, frameSkip)
+    runColmap()
+    runPanopticSegmentation()
 
     # Get COLMAP data
     colmapReader = COLMAPDirectoryReader("sparse/0")
