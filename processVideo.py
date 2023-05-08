@@ -105,7 +105,7 @@ def clearDirectories() -> None:
     os.system("rm -rf database.db")
     os.system(f"rm -rf {SEMANTIC_RESULT_DIR}")
 
-def runOnVideoFile(videoFileName, cleanDir, frameSkip=30) -> None:
+def runOnVideoFile(videoFileName, cleanDir, frameSkip=10) -> None:
     """
     Takes a video file, and
     runs the entire pipeline
@@ -136,9 +136,8 @@ def runOnVideoFile(videoFileName, cleanDir, frameSkip=30) -> None:
     disjointSetManager = DisjointSetManager(colmapReader)
     disjointSetManager.initialize()
     # disjointSetManager.fuse_naive()
-    disjointSetManager.fuse_kd()
-    # disjointSetManager.visualize()
-    disjointSetManager.visualizePoints()
+    disjointSetManager.fuse_kd(annoyNNs = 20)
+    disjointSetManager.visualize()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process a video file")
