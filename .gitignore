@@ -1,5 +1,5 @@
 # Ignore colmap image files
-colmapIn/**
+images/**
 
 # Ignore colmap output files
 **/sparse/**
@@ -7,3 +7,9 @@ colmapIn/**
 
 # Ignore sqlite database files
 **.db
+
+# Ignore segmentation files
+semanticOut/**
+
+# Ignore input video files
+vids/**
